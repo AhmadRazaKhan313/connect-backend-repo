@@ -1,0 +1,48 @@
+{
+  "name": "connect-lodhran-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "nodemon src/index.js",
+    "dev": "cross-env NODE_ENV=development nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haseebbhatti742/connect-lodhran-backend.git"
+  },
+  "author": "Haseeb Ahmed",
+  "license": "ISC",
+  "homepage": "https://github.com/haseebbhatti742/connect-lodhran-backend#readme",
+  "dependencies": {
+    "@sendgrid/mail": "^7.7.0",
+    "async-mutex": "^0.5.0",
+    "aws-sdk": "^2.1608.0",
+    "axios": "^1.7.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.0.3",
+    "express": "^4.19.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "helmet": "^6.0.1",
+    "http-status": "^1.6.2",
+    "joi": "^17.7.0",
+    "jsonwebtoken": "^9.0.0",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.43",
+    "mongoose": "^6.9.1",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.2",
+    "node-cron-tz": "^2.0.4",
+    "nodemailer": "^6.9.1",
+    "nodemon": "^2.0.20",
+    "passport": "^0.6.0",
+    "passport-jwt": "^4.0.1",
+    "path": "^0.12.7",
+    "pm2": "^5.2.2",
+    "xml2js": "^0.4.23",
+    "xss-clean": "^0.1.1"
+  }
+}

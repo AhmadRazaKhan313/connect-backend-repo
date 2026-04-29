@@ -1,0 +1,59 @@
+# name: Upload API files and start server
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     env:
+#       # environment variables start here
+#       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#       AWS_BUCKET_NAME: ${{ secrets.AWS_BUCKET_NAME }}
+#       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#       BASE_URL: ${{ secrets.BASE_URL }}
+#       JWT_ACCESS_EXPIRATION_MINUTES: ${{ secrets.JWT_ACCESS_EXPIRATION_MINUTES }}
+#       JWT_REFRESH_EXPIRATION_DAYS: ${{ secrets.JWT_REFRESH_EXPIRATION_DAYS }}
+#       JWT_RESET_PASSWORD_EXPIRATION_MINUTES: ${{ secrets.JWT_RESET_PASSWORD_EXPIRATION_MINUTES }}
+#       JWT_SECRET: ${{ secrets.JWT_SECRET }}
+#       JWT_VERIFY_EMAIL_EXPIRATION_MINUTES: ${{ secrets.JWT_VERIFY_EMAIL_EXPIRATION_MINUTES }}
+#       MONGODB_URL: ${{ secrets.MONGODB_URL }}
+#       NODE_ENV: ${{ secrets.NODE_ENV }}
+#       SMTP_HOST: ${{ secrets.SMTP_HOST }}
+#       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+#       SMTP_PORT: ${{ secrets.SMTP_PORT }}
+#       SMTP_USER_INFO: ${{ secrets.SMTP_USER_INFO }}
+#       SMTP_USER_INVOICE: ${{ secrets.SMTP_USER_INVOICE }}
+#       SMTP_USER_REMINDER: ${{ secrets.SMTP_USER_REMINDER }}
+#       TZ: ${{ secrets.TZ }}
+#       # environment variables end here
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v2
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v2
+#         with:
+#           node-version: "14.x"
+
+#       - name: Install dependencies
+#         run: npm install
+
+#       - name: Upload API files to cPanel
+#         uses: SamKirkland/FTP-Deploy-Action@4.2.0
+#         with:
+#           server: ${{ secrets.FTP_SERVER }}
+#           username: ${{ secrets.FTP_USERNAME }}
+#           password: ${{ secrets.FTP_PASSWORD }}
+#           protocol: ftps
+#           port: ${{ secrets.FTP_PORT }}
+#           local-dir: ./
+#           server-dir: /connect-api/
+#           exclude: "node_modules/**"
+
+#       - name: Install dependencies
+#         run: npm install
+#       - name: Start server
+#         run: npm start
