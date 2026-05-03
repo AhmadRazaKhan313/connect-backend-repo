@@ -36,6 +36,32 @@ authController.updatePassword = catchAsync(async (req, res) => {
   }
 });
 
+authController.refreshToken = catchAsync(async (req, res) => {
+  const { refreshToken } = req.body;
+  const { tokenTypes } = require('../../config/tokens');
+  const { Token } = require('../../models');
+
+  const tokenDoc = await tokenService.verifyToken(refreshToken, tokenTypes.REFRESH);
+  const staff = await staffService.getStaffById(tokenDoc.user);
+  if (!staff) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User not found');
+  }
+
+  await Token.deleteOne({ _id: tokenDoc._id });
+  const tokens = await tokenService.generateAuthTokens(staff);
+  res.send({ tokens });
+});
+
+authController.logout = catchAsync(async (req, res) => {
+  const { refreshToken } = req.body;
+  const { tokenTypes } = require('../../config/tokens');
+  const { Token } = require('../../models');
+
+  const tokenDoc = await tokenService.verifyToken(refreshToken, tokenTypes.REFRESH);
+  await Token.deleteOne({ _id: tokenDoc._id });
+  res.status(204).send();
+});
+
 authController.resetPassword = catchAsync(async (req, res) => {
   const { email } = req?.body;
   const staff = await staffService.getStaffByEmail(email);

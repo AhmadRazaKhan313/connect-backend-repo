@@ -76,8 +76,6 @@ app.use(async (req, res, next) => {
     next();
 });
 
-app.use("/api/v1", routes);
-
 // v1 api routes
 app.use("/api/v1", routes);
 app.use("/api/v1/test", async (req, res) => {
