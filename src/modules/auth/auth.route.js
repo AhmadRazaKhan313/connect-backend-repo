@@ -3,8 +3,12 @@ const auth = require("../../middlewares/auth");
 const validate = require("../../middlewares/validate");
 const authValidation = require("./auth.validation");
 const authController = require("./auth.controller");
+const setupRouter = require("./setup.route");
 
 const router = express.Router();
+
+// One-time super admin setup
+router.use(setupRouter);
 
 router.post("/login", validate(authValidation.login), authController.login);
 
