@@ -47,9 +47,6 @@ app.options("*", cors());
 app.use(passport.initialize());
 passport.use("jwt", jwtStrategy);
 
-// jwt authentication
-app.use(passport.initialize());
-passport.use("jwt", jwtStrategy);
 
 app.use(async (req, res, next) => {
     const host = req.headers.host;

@@ -4,6 +4,8 @@ const roleController = require('./role.controller');
 
 const router = express.Router();
 
+router.get('/custom-only', auth(), roleController.getCustomRoles);
+
 router
     .route('/')
     .post(auth(), roleController.createRole)

@@ -43,7 +43,7 @@ organizationController.getOrganizationById = catchAsync(async (req, res) => {
 
 organizationController.updateOrganization = catchAsync(async (req, res) => {
   const result = await organizationService.updateOrganization(req.params.id, req.body);
-  res.send(result);
+  res.send({ message: 'Organization Updated', data: result });
 });
 
 organizationController.updateStatus = catchAsync(async (req, res) => {

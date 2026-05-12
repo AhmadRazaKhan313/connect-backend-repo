@@ -9,16 +9,30 @@ let ispController = {};
 ispController.createIsp = catchAsync(async (req, res) => {
   const isIspAlreadyRegistered = await ispService.getIspByVlan(req.body.vlan);
   if (isIspAlreadyRegistered)
-    throw new ApiError(httpStatus.NOT_FOUND, "VLAN Already Assigned");
+    throw new ApiError(httpStatus.CONFLICT, "VLAN Already Assigned");
   else {
-    req.body.organizationId = req.organizationId;
+    // platformSuperAdmin can supply organizationId in body; others use their own
+    const isPlatformSuperAdmin =
+      req.user?.role === 'platformSuperAdmin' ||
+      req.user?.type === 'platformSuperAdmin';
+
+    req.body.organizationId = isPlatformSuperAdmin
+      ? (req.body.organizationId || req.organizationId)
+      : req.organizationId;
+
     const isp = await ispService.createIsp(req.body);
     res.status(httpStatus.CREATED).send(isp);
   }
 });
 
 ispController.getAllisps = catchAsync(async (req, res) => {
-  const isps = await ispService.getAllIsps(req.organizationId);
+  // platformSuperAdmin sees ALL ISPs across all organizations
+  const isPlatformSuperAdmin =
+    req.user?.role === 'platformSuperAdmin' ||
+    req.user?.type === 'platformSuperAdmin';
+
+  const orgId = isPlatformSuperAdmin ? null : req.organizationId;
+  const isps = await ispService.getAllIsps(orgId);
   if (!isps || isps.length === 0) {
     throw new ApiError(httpStatus.NOT_FOUND, "No isps");
   }
@@ -46,7 +60,7 @@ ispController.updateIspById = catchAsync(async (req, res) => {
 });
 
 ispController.deleteIspById = catchAsync(async (req, res) => {
-  const isp = await ispService.getIspById(req?.params?.is);
+  const isp = await ispService.getIspById(req?.params?.id);
   if (!isp) throw new ApiError(httpStatus.NOT_FOUND, "Isp Not Found");
   else {
     const isps = await ispService.deleteIspById(req?.params?.id);

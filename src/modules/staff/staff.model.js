@@ -70,16 +70,18 @@ const StaffSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Staff",
     },
+    // role: type se auto-set hota hai — null nahi rehna chahiye (partner ke ilawa)
     role: {
-  type: String,
- enum: ["platformSuperAdmin", "orgSuperAdmin", "orgAdmin", "orgStaff", null],
-default: null,
-},
-roleId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Role',
-    default: null
-},
+      type: String,
+      enum: ['platformSuperAdmin', 'orgSuperAdmin', 'orgAdmin', 'orgStaff', null],
+      default: null,
+    },
+    // roleId: orgStaff ke liye zaroori — custom permissions ke liye DB Role reference
+    roleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Role',
+      default: null,
+    },
   },
   {
     timestamps: true,

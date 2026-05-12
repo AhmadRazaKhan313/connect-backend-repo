@@ -22,9 +22,10 @@ staffService.getStaffByEmail = async (email) => {
 };
 
 staffService.getAllStaffs = async (organizationId) => {
-  const filter = { type: { $ne: STAFF_TYPES.platformSuperAdmin } };
+  // platformSuperAdmin ko include karo — woh bhi ek staff member hai
+  const filter = {};
   if (organizationId) filter.organizationId = organizationId;
-  return await StaffModel.find(filter);
+  return await StaffModel.find(filter).select('-password');
 };
 
 staffService.getStaffsByType = async (type, organizationId) => {
@@ -38,7 +39,7 @@ staffService.getStaffById = async (id) => {
 };
 
 staffService.getAllPartners = async (organizationId) => {
-  const filter = { type: { $in: [STAFF_TYPES.orgAdmin, STAFF_TYPES.orgStaff] } };
+  const filter = { type: 'partner' };
   if (organizationId) filter.organizationId = organizationId;
   return await StaffModel.find(filter);
 };

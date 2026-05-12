@@ -4,11 +4,13 @@ let ispValidation = {};
 
 ispValidation.createIsp = {
   body: Joi.object().keys({
-    name: Joi.string().required("Name is requried"),
+    name: Joi.string().required("Name is required"),
     vlan: Joi.number().min(0).required("Vlan is required"),
     openingBalance: Joi.number().required("Opening Balance is required"),
     staticIpRate: Joi.number().min(0).required("Static Ip Rate is required"),
     color: Joi.string().required("Color is required"),
+    // platformSuperAdmin body se organizationId bhejta hai
+    organizationId: Joi.string().optional().allow('', null),
   }),
 };
 

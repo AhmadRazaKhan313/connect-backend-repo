@@ -15,6 +15,7 @@ const STAFF_TYPES = {
     orgSuperAdmin: 'orgSuperAdmin',
     orgAdmin: 'orgAdmin',
     orgStaff: 'orgStaff',
+    partner: 'partner',  
 }
 
 module.exports = {

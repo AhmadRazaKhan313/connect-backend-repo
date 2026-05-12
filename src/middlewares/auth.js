@@ -3,8 +3,6 @@ const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
 const roleService = require('../modules/role/role.service');
 
-const MASTER_ORG_ID = '69e6ea81f25b8158cf1c62ac';
-
 const verifyCallback = (req, resolve, reject, requiredPermissions) => async (err, user, info) => {
     if (err || info || !user) {
         return reject(new ApiError(httpStatus.UNAUTHORIZED, 'Please authenticate'));
@@ -14,23 +12,23 @@ const verifyCallback = (req, resolve, reject, requiredPermissions) => async (err
         req.user = user;
         req.organizationId = user.organizationId || null;
 
-        // Master admin check
-        const isMasterAdmin = user.organizationId?.toString() === MASTER_ORG_ID
-            && (user.role === 'orgSuperAdmin' || user.type === 'orgSuperAdmin');
+        // platformSuperAdmin — full access to everything (ISP, orgs, all data)
+        const isPlatformSuperAdmin =
+            user.role === 'platformSuperAdmin' ||
+            user.type === 'platformSuperAdmin';
 
-        // Master admin — no org filter, full access
-        if (isMasterAdmin) {
-        req.organizationId = user.organizationId; 
+        if (isPlatformSuperAdmin) {
+            req.organizationId = user.organizationId;
             return resolve();
-}
+        }
 
         if (requiredPermissions.length) {
-            // orgAdmin or orgSuperAdmin — full access within their org
+            // orgSuperAdmin / orgAdmin — full access within their own org
             if (
-                user.role === 'orgAdmin' ||
                 user.role === 'orgSuperAdmin' ||
-                user.type === 'orgAdmin' ||
+                user.role === 'orgAdmin' ||
                 user.type === 'orgSuperAdmin' ||
+                user.type === 'orgAdmin' ||
                 user.type === 'admin' ||
                 user.type === 'superadmin'
             ) return resolve();

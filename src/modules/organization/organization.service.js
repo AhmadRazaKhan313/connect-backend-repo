@@ -17,9 +17,9 @@ organizationService.createOrganization = async (orgBody) => {
     mobile: adminUser.mobile,
     cnic: adminUser.cnic,
     address: adminUser.address,
-    type: adminUser.type,
+    type: 'orgSuperAdmin',   // always orgSuperAdmin — not from frontend
     share: adminUser.share || 0,
-    role: "orgSuperAdmin",
+    role: 'orgSuperAdmin',   // role locked to orgSuperAdmin
     organizationId: organization._id,
   });
 
@@ -47,7 +47,7 @@ organizationService.getOrganizationBySubdomain = async (subdomain) => {
 // for Controller updateOrganization calls
 organizationService.updateOrganization = async (id, updateBody) => {
   await OrganizationModel.updateOne({ _id: id }, updateBody);
-  return "Organization Updated";
+  return OrganizationModel.findById(id);
 };
 
 // Controller updateStatus calls

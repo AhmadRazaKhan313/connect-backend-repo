@@ -15,12 +15,14 @@ authController.login = catchAsync(async (req, res) => {
     user.password = null;
 
     let subdomain = null;
+    let isHQ = false;
     if (user.organizationId) {
-        const org = await OrganizationModel.findById(user.organizationId);
+        const org = await OrganizationModel.findById(user.organizationId).lean();
         subdomain = org?.subdomain || null;
+        isHQ = org?.isHQ === true;
     }
 
-    res.send({ user, tokens, subdomain });
+    res.send({ user, tokens, subdomain, isHQ });
 });
 
 authController.updatePassword = catchAsync(async (req, res) => {

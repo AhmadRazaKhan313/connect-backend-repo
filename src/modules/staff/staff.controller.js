@@ -10,27 +10,46 @@ let staffController = {};
 
 staffController.createStaff = catchAsync(async (req, res) => {
   const { organizationId } = req;
-  const partners = await staffService.getAllPartners(organizationId);
-  if (req?.body.type === STAFF_TYPES.orgStaff) {
-    const staff = await staffService.createStaff({ ...req.body, organizationId });
-    sendSmsAndEmail(staff, req?.body);
-    res.status(httpStatus.CREATED).send(staff);
+  const body = req.body;
+
+  // Har type ke liye role auto-assign karo — koi bhi bina role ke nahi banega
+  const TYPE_TO_ROLE = {
+    [STAFF_TYPES.platformSuperAdmin]: STAFF_TYPES.platformSuperAdmin,
+    [STAFF_TYPES.orgSuperAdmin]:      STAFF_TYPES.orgSuperAdmin,
+    [STAFF_TYPES.orgAdmin]:           STAFF_TYPES.orgAdmin,
+    [STAFF_TYPES.orgStaff]:           STAFF_TYPES.orgStaff,
+  };
+
+  if (!TYPE_TO_ROLE[body.type]) {
+    // partner / legacy types ke liye role null rehta hai (financial only)
+    body.role = null;
   } else {
-    const allPartnersShare = partners.reduce(
-      (acc, partner) => (acc += +partner?.share),
-      0
-    );
-    if (allPartnersShare + req?.body?.share > 100) {
+    body.role = TYPE_TO_ROLE[body.type];
+  }
+
+  // orgStaff aur partner dono ke liye roleId LAZMI hai
+  if (
+    (body.type === STAFF_TYPES.orgStaff || body.type === STAFF_TYPES.partner) &&
+    !body.roleId
+  ) {
+    throw new ApiError(httpStatus.BAD_REQUEST, `${body.type} ke liye custom role assign karna zaroori hai`);
+  }
+
+  const partners = await staffService.getAllPartners(organizationId);
+
+  if (body.type === STAFF_TYPES.partner) {
+    const allPartnersShare = partners.reduce((acc, p) => (acc += +p?.share), 0);
+    if (allPartnersShare + body?.share > 100) {
       throw new ApiError(
         httpStatus.NOT_ACCEPTABLE,
         `Max share limit remaining is ${100 - allPartnersShare}`
       );
-    } else {
-      const staff = await staffService.createStaff({ ...req.body, organizationId });
-      sendSmsAndEmail(staff, req?.body);
-      res.status(httpStatus.CREATED).send(staff);
     }
   }
+
+  const staff = await staffService.createStaff({ ...body, organizationId });
+  sendSmsAndEmail(staff, body);
+  res.status(httpStatus.CREATED).send(staff);
 });
 
 staffController.updateStaff = catchAsync(async (req, res) => {
@@ -38,6 +57,34 @@ staffController.updateStaff = catchAsync(async (req, res) => {
   if (!staff) {
     throw new ApiError(httpStatus.NOT_FOUND, "Staff not found");
   }
+
+  const isSelf = req.user?._id?.toString() === req.params.id ||
+                 req.user?.id?.toString() === req.params.id;
+
+  // Apna role aur type khud nahi badal sakta
+  if (isSelf) {
+    delete req.body.role;
+    delete req.body.roleId;
+    delete req.body.type;
+  }
+
+  // System role ID assign nahi ho sakta (system-... format invalid ObjectId hai)
+  if (req.body.roleId && typeof req.body.roleId === 'string' && req.body.roleId.startsWith('system-')) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "System roles cannot be assigned as roleId");
+  }
+
+  // platformSuperAdmin ka role koi nahi badal sakta
+  if (
+    staff.type === 'platformSuperAdmin' ||
+    staff.role === 'platformSuperAdmin'
+  ) {
+    // Sirf apna profile update kar sakta hai (name, email, password etc.)
+    // Role/type protect karo
+    delete req.body.role;
+    delete req.body.roleId;
+    delete req.body.type;
+  }
+
   const updated = await staffService.updateStaff(req.params.id, req.body);
   res.send(updated);
 });
@@ -48,8 +95,15 @@ staffController.deleteStaff = catchAsync(async (req, res) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Staff not found");
   }
   // Apna account delete na kar sake
-  if (req.user?._id?.toString() === req.params.id) {
+  if (
+    req.user?._id?.toString() === req.params.id ||
+    req.user?.id?.toString() === req.params.id
+  ) {
     throw new ApiError(httpStatus.FORBIDDEN, "You cannot delete your own account");
+  }
+  // platformSuperAdmin delete nahi ho sakta
+  if (staff.type === 'platformSuperAdmin' || staff.role === 'platformSuperAdmin') {
+    throw new ApiError(httpStatus.FORBIDDEN, "Platform Super Admin cannot be deleted");
   }
   await staffService.deleteStaff(req.params.id);
   res.status(httpStatus.NO_CONTENT).send();
