@@ -22,26 +22,25 @@ const { OrganizationModel } = require("./models");
 
 const app = express();
 
+// enable cors — MUST be before body parsers so CORS headers are always present
+app.use(cors());
+app.options("*", cors());
+
 // set security HTTP headers
 app.use(helmet());
-
 
 // before Auth middleware
 app.use(subdomainMiddleware);
 
-// parse json request body
-app.use(express.json());
+// parse json request body — 10mb limit for base64 logo uploads
+app.use(express.json({ limit: '10mb' }));
 
 // parse urlencoded request body
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // sanitize request data
 app.use(xss());
 app.use(mongoSanitize());
-
-// enable cors
-app.use(cors());
-app.options("*", cors());
 
 // jwt authentication
 app.use(passport.initialize());

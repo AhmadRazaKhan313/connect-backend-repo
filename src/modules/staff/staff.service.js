@@ -45,7 +45,10 @@ staffService.getAllPartners = async (organizationId) => {
 };
 
 staffService.updatePassword = async (id, password) => {
-  await StaffModel.updateOne({ _id: id }, { password });
+  // Bug fix: plain text store ho raha tha — ab properly hash karo
+  const bcrypt = require("bcryptjs");
+  const hashed = await bcrypt.hash(password, 8);
+  await StaffModel.updateOne({ _id: id }, { password: hashed });
   return "Password Updated";
 };
 

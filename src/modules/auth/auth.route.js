@@ -31,6 +31,9 @@ router.post("/debug-user", async (req, res) => {
 
 router.post("/login", validate(authValidation.login), authController.login);
 
+// GET /auth/me — fresh user + permissions (AppContextContainer uses this on every route change)
+router.get("/me", auth(), authController.getMe);
+
 router.post("/refreshToken", authController.refreshToken);
 
 router.post("/logout", authController.logout);
