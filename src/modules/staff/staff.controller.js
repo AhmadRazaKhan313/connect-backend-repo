@@ -85,6 +85,16 @@ staffController.updateStaff = catchAsync(async (req, res) => {
     delete req.body.type;
   }
 
+  // Bug fix: password is NEVER updated through this endpoint
+  // Password change has a dedicated endpoint — accidental overwrite rokne ke liye
+  delete req.body.password;
+
+  // _id, __v, createdAt, updatedAt — immutable fields bhi hatao
+  delete req.body._id;
+  delete req.body.__v;
+  delete req.body.createdAt;
+  delete req.body.updatedAt;
+
   const updated = await staffService.updateStaff(req.params.id, req.body);
   res.send(updated);
 });
