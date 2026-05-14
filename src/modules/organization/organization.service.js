@@ -1,27 +1,42 @@
 const { OrganizationModel, StaffModel } = require("../../models");
-// const bcrypt = require("bcryptjs");
+
 let organizationService = {};
 
 organizationService.createOrganization = async (orgBody) => {
   const { adminUser, ...organizationData } = orgBody;
 
-  // 1.create Organization
+  // Admin email pehle check karo — taake org create hone ke baad fail na ho
+  const existingAdmin = await StaffModel.findOne({ email: adminUser.email });
+  if (existingAdmin) {
+    const err = new Error(`Admin email '${adminUser.email}' already exists`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 1. Organization create karo
   const organization = await OrganizationModel.create(organizationData);
 
-  // 2. create OrgSuperAdmin user
-  // const hashedPassword = await bcrypt.hash(adminUser.password, 8);
-  await StaffModel.create({
-    fullname: adminUser.name,
-    email: adminUser.email,
-    password: adminUser.password,
-    mobile: adminUser.mobile,
-    cnic: adminUser.cnic,
-    address: adminUser.address,
-    type: 'orgSuperAdmin',   // always orgSuperAdmin — not from frontend
-    share: adminUser.share || 0,
-    role: 'orgSuperAdmin',   // role locked to orgSuperAdmin
-    organizationId: organization._id,
-  });
+  // 2. OrgSuperAdmin create karo — agar fail ho to org rollback
+  try {
+    await StaffModel.create({
+      fullname:       adminUser.name,
+      email:          adminUser.email,
+      password:       adminUser.password,
+      mobile:         adminUser.mobile   || '00000000000',
+      cnic:           adminUser.cnic     || '0000000000000',
+      address:        adminUser.address  || 'N/A',
+      type:           'orgSuperAdmin',
+      role:           'orgSuperAdmin',
+      share:          adminUser.share    || 0,
+      organizationId: organization._id,
+    });
+  } catch (staffErr) {
+    // Staff create fail — org delete karo (rollback)
+    await OrganizationModel.deleteOne({ _id: organization._id });
+    const err = new Error(staffErr.message || 'Failed to create admin user');
+    err.statusCode = 400;
+    throw err;
+  }
 
   return organization;
 };
@@ -34,23 +49,19 @@ organizationService.getOrganizationById = async (id) => {
   return await OrganizationModel.findById(id);
 };
 
-// for check email in controller
 organizationService.getOrganizationByEmail = async (email) => {
   return await OrganizationModel.findOne({ email });
 };
 
-// for check subdomain in conroller
 organizationService.getOrganizationBySubdomain = async (subdomain) => {
   return await OrganizationModel.findOne({ subdomain });
 };
 
-// for Controller updateOrganization calls
 organizationService.updateOrganization = async (id, updateBody) => {
   await OrganizationModel.updateOne({ _id: id }, updateBody);
   return OrganizationModel.findById(id);
 };
 
-// Controller updateStatus calls
 organizationService.updateStatus = async (id, status) => {
   await OrganizationModel.updateOne({ _id: id }, { status });
   return "Status Updated";
@@ -61,7 +72,6 @@ organizationService.updateOrganizationFeatures = async (id, features) => {
   return "Features Updated";
 };
 
-// Controller deleteOrganization call
 organizationService.deleteOrganization = async (id) => {
   await OrganizationModel.deleteOne({ _id: id });
   return "Organization Deleted";

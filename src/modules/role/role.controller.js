@@ -98,8 +98,7 @@ roleController.deleteRole = catchAsync(async (req, res) => {
 });
 
 
-// Sirf DB custom roles — system roles nahi
-// Staff assign dropdown ke liye use hota hai
+
 roleController.getCustomRoles = catchAsync(async (req, res) => {
     const organizationId = req.organizationId || req.user?.organizationId;
     const dbRoles = await roleService.getAllRoles(organizationId);
