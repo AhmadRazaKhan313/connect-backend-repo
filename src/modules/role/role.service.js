@@ -11,7 +11,7 @@ roleService.getAllRoles = async (organizationId) => {
 };
 
 roleService.getRoleById = async (id) => {
-    return await Role.findById(id);
+    return await Role.findById(id).lean();
 };
 
 roleService.updateRole = async (id, body) => {
