@@ -1,108 +1,83 @@
-const httpStatus = require('http-status');
-const catchAsync = require('../../utils/catchAsync');
-const ApiError = require('../../utils/ApiError');
-const roleService = require('./role.service');
-const StaffModel = require('../staff/staff.model');
-const PERMISSIONS = require('../../config/permissions');
+const httpStatus = require("http-status");
+const catchAsync = require("../../utils/catchAsync");
+const ApiError = require("../../utils/ApiError");
+const roleService = require("./role.service");
+const StaffModel = require("../staff/staff.model");
+const { sanitizePermissions } = require("../../config/permissions");
+const { assertSameOrg } = require("../../utils/tenant");
 
 const roleController = {};
 
-// All permissions list
-const ALL_PERMISSIONS = Object.values(PERMISSIONS);
-
-// System roles — yeh DB mein nahi hain, built-in hain
-const SYSTEM_ROLES = [
-    {
-        id: 'system-platformSuperAdmin',
-        name: 'Platform Super Admin',
-        isSystem: true,
-        permissions: ALL_PERMISSIONS,
-        description: 'Full platform access — manages all organizations and ISPs'
-    },
-    {
-        id: 'system-orgSuperAdmin',
-        name: 'Org Super Admin',
-        isSystem: true,
-        permissions: ALL_PERMISSIONS,
-        description: 'Full access within their organization'
-    },
-    {
-        id: 'system-orgAdmin',
-        name: 'Org Admin',
-        isSystem: true,
-        permissions: ALL_PERMISSIONS,
-        description: 'Admin access within their organization'
-    },
-];
-
 roleController.createRole = catchAsync(async (req, res) => {
-    const organizationId = req.organizationId || req.user?.organizationId;
-    if (!organizationId) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'organizationId is required');
-    }
-    const role = await roleService.createRole({ ...req.body, organizationId });
-    res.status(httpStatus.CREATED).send(role);
+  const organizationId = req.organizationId;
+  if (!organizationId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "organizationId is required");
+  }
+
+  const permissions = sanitizePermissions(req.body.permissions);
+  if (!req.body.name || permissions.length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Role name and at least one permission are required");
+  }
+
+  const role = await roleService.createRole({
+    name: req.body.name,
+    permissions,
+    organizationId,
+    createdBy: req.user?._id || req.user?.id,
+  });
+  res.status(httpStatus.CREATED).send(role);
 });
 
 roleController.getAllRoles = catchAsync(async (req, res) => {
-    const organizationId = req.organizationId || req.user?.organizationId;
-    const dbRoles = await roleService.getAllRoles(organizationId);
+  // Roles are always scoped to the requester's own organization.
+  const roles = await roleService.getAllRoles(req.organizationId);
+  res.send(roles);
+});
 
-    // System roles + DB custom roles milao
-    const allRoles = [...SYSTEM_ROLES, ...dbRoles];
-    res.send(allRoles);
+// Used by staff forms to populate the role dropdown (own org only).
+roleController.getCustomRoles = catchAsync(async (req, res) => {
+  const roles = await roleService.getAllRoles(req.organizationId);
+  res.send(roles);
 });
 
 roleController.getRoleById = catchAsync(async (req, res) => {
-    // System role check
-    if (req.params.id.startsWith('system-')) {
-        const sysRole = SYSTEM_ROLES.find(r => r.id === req.params.id);
-        if (!sysRole) throw new ApiError(httpStatus.NOT_FOUND, 'Role not found');
-        return res.send(sysRole);
-    }
-    const role = await roleService.getRoleById(req.params.id);
-    if (!role) throw new ApiError(httpStatus.NOT_FOUND, 'Role not found');
-    res.send(role);
+  const role = await roleService.getRoleById(req.params.id);
+  assertSameOrg(role, req, "Role");
+  res.send(role);
 });
 
 roleController.updateRole = catchAsync(async (req, res) => {
-    const requestingUser = req.user;
+  const role = await roleService.getRoleById(req.params.id);
+  assertSameOrg(role, req, "Role");
 
-    // System roles edit nahi ho sakti
-    if (req.params.id.startsWith('system-')) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'System roles cannot be modified');
+  const update = {};
+  if (req.body.name !== undefined) update.name = req.body.name;
+  if (req.body.permissions !== undefined) {
+    update.permissions = sanitizePermissions(req.body.permissions);
+    if (update.permissions.length === 0) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "A role must have at least one permission");
     }
+  }
 
-    // Staff apna role modify nahi kar sakta
-    if (requestingUser.roleId?.toString() === req.params.id) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'You cannot modify your own role');
-    }
-
-    const role = await roleService.updateRole(req.params.id, req.body);
-    if (!role) throw new ApiError(httpStatus.NOT_FOUND, 'Role not found');
-    res.send(role);
+  const updated = await roleService.updateRole(req.params.id, update);
+  res.send(updated);
 });
 
 roleController.deleteRole = catchAsync(async (req, res) => {
-    // System roles delete nahi ho sakti
-    if (req.params.id.startsWith('system-')) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'System roles cannot be deleted');
-    }
+  const role = await roleService.getRoleById(req.params.id);
+  assertSameOrg(role, req, "Role");
 
-    const staff = await StaffModel.find({ roleId: req.params.id });
-    if (staff.length > 0) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Role is assigned to staff members — cannot delete');
-    }
-    await roleService.deleteRole(req.params.id);
-    res.status(httpStatus.NO_CONTENT).send();
-});
+  // Cannot delete a role that is still assigned to any account.
+  const assigned = await StaffModel.countDocuments({ roleId: req.params.id });
+  if (assigned > 0) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      `This role is assigned to ${assigned} account(s) and cannot be deleted`
+    );
+  }
 
-
-
-roleController.getCustomRoles = catchAsync(async (req, res) => {
-    const organizationId = req.organizationId || req.user?.organizationId;
-    const dbRoles = await roleService.getAllRoles(organizationId);
-    res.send(dbRoles);
+  await roleService.deleteRole(req.params.id);
+  res.status(httpStatus.NO_CONTENT).send();
 });
 
 module.exports = roleController;
