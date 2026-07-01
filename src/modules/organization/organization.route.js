@@ -4,15 +4,20 @@ const organizationController = require("./organization.controller");
 
 const router = express.Router();
 
-router.post("/", auth(), organizationController.createOrganization);
-router.get("/", auth(), organizationController.getAllOrganizations);
-router.get("/:id", auth(), organizationController.getOrganizationById);
-router.put("/:id", auth(), organizationController.updateOrganization);
-router.patch("/:id/status", auth(), organizationController.updateStatus);
-router.delete("/:id", auth(), organizationController.deleteOrganization);
-router.patch("/:id/features", auth(), organizationController.updateFeatures);
+// Any authenticated user can read THEIR OWN organization (branding/context).
+router.get("/me", auth(), organizationController.getMyOrganization);
 
-// Bug fix: multer remove — base64 JSON body accept karta hai
-router.patch("/:id/logo", auth(), organizationController.uploadLogo);
+// Managing organizations requires the platform-level organization.* permissions.
+router.post("/", auth("organization.create"), organizationController.createOrganization);
+router.get("/", auth("organization.view"), organizationController.getAllOrganizations);
+
+// Read one org: organization.view (any org) or a user reading their own org.
+router.get("/:id", auth(), organizationController.getOrganizationById);
+
+router.put("/:id", auth("organization.edit"), organizationController.updateOrganization);
+router.patch("/:id/status", auth("organization.edit"), organizationController.updateStatus);
+router.delete("/:id", auth("organization.delete"), organizationController.deleteOrganization);
+router.patch("/:id/features", auth("organization.edit"), organizationController.updateFeatures);
+router.patch("/:id/logo", auth("organization.edit"), organizationController.uploadLogo);
 
 module.exports = router;
