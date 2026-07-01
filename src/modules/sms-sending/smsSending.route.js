@@ -8,17 +8,19 @@ const router = express.Router();
 
 router
   .route("/")
+  // Sending bulk SMS costs money  require user-management access.
   .post(
-    auth(),
+    auth("user.view"),
     validate(smsSendingValidation.smsSending),
     smsSendingController.smsSending
   )
   .get(
-    auth(),
+    auth("user.view"),
     validate(smsSendingValidation.getSmsSending),
     smsSendingController.getSmsSending
   );
 
+// Balance is low-sensitivity and shown in the header for every signed-in account.
 router.get("/sms-balance", auth(), smsSendingController.getSmsBalance);
 
 module.exports = router;
