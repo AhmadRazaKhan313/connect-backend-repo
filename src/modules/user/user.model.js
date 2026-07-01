@@ -1,10 +1,26 @@
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { toJSON, paginate } = require("../../models/plugins");
-const bcrypt = require("bcryptjs");
 
+/**
+ * User = an ISP subscriber / end-customer. Users do NOT log in and have no roles
+ * or permissions, but they still obey the platform-wide identity & tenancy rules:
+ *  - Every user has an auto-generated, immutable, unique UUID.
+ *  - Every user MUST belong to exactly one organization (organizationId required).
+ *
+ * `userId` remains the human-facing ISP account identifier (e.g. "ali123").
+ */
 const UserSchema = mongoose.Schema(
   {
-    //common fields
+    // Auto-generated unique UUID  never null, immutable.
+    uuid: {
+      type: String,
+      required: true,
+      unique: true,
+      immutable: true,
+      default: () => crypto.randomUUID(),
+    },
+
     fullname: {
       type: String,
       required: [true, "Full Name is required"],
@@ -12,6 +28,7 @@ const UserSchema = mongoose.Schema(
     email: {
       type: String,
     },
+    // Human-facing ISP account id (unique per platform).
     userId: {
       type: String,
       required: [true, "User Id is required"],
@@ -31,11 +48,15 @@ const UserSchema = mongoose.Schema(
       type: String,
       required: [true, "Address is required"],
     },
+
+    // MANDATORY  no user may exist outside an organization.
     organizationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Organization",
-      default: null,
+      required: [true, "OrganizationId is required"],
+      index: true,
     },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Staff",
@@ -50,7 +71,6 @@ const UserSchema = mongoose.Schema(
   }
 );
 
-// add plugin that converts mongoose to json
 UserSchema.plugin(toJSON);
 UserSchema.plugin(paginate);
 

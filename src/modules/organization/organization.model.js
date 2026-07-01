@@ -23,18 +23,28 @@ const OrganizationSchema = mongoose.Schema(
     logo: {
       type: String,
     },
-  primaryColor: {
-  type: String,
-  default: "#1976d2",
-},
-secondaryColor: {
-  type: String,
-  default: "#424242",
-},
+    primaryColor: {
+      type: String,
+      default: "#1976d2",
+    },
+    secondaryColor: {
+      type: String,
+      default: "#424242",
+    },
     status: {
       type: String,
       enum: ["active", "inactive"],
       default: "active",
+    },
+
+    /**
+     * The Platform Organization. Only the FIRST organization created in the
+     * system is the platform org (isPlatform: true). Its first user is the single
+     * SUPER_ADMIN. The platform org can never be deleted.
+     */
+    isPlatform: {
+      type: Boolean,
+      default: false,
     },
 
     // Feature Flags
@@ -47,14 +57,15 @@ secondaryColor: {
       ispManagement: { type: Boolean, default: true },
       dashboard: { type: Boolean, default: true },
     },
+
     subdomain: {
-  type: String,
-  required: [true, "Subdomain is required"],
-  unique: true,
-  lowercase: true,
-  trim: true,
-  match: [/^[a-z0-9-]+$/, "Invalid subdomain"],
-},
+      type: String,
+      required: [true, "Subdomain is required"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^[a-z0-9-]+$/, "Invalid subdomain"],
+    },
   },
   {
     timestamps: true,

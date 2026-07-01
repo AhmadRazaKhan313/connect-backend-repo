@@ -1,118 +1,76 @@
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { toJSON, paginate } = require("../../models/plugins");
 const bcrypt = require("bcryptjs");
-const { STAFF_TYPES } = require("../../utils/Constants");
 
+/**
+ * Staff = an account that can LOG IN.
+ *
+ * Identity & tenancy rules (enforced strictly):
+ *  - Every account has an auto-generated, immutable, unique UUID.
+ *  - Every account MUST belong to exactly one organization (organizationId required).
+ *  - Every account MUST be assigned exactly one Role (roleId required). Access is
+ *    derived entirely from that role's permissions. There are NO hardcoded/system
+ *    roles  even the platform super admin is just an account whose role happens
+ *    to include the `organization.*` permissions.
+ */
 const StaffSchema = mongoose.Schema(
   {
-    //common fields
-    fullname: {
+    uuid: {
       type: String,
-      required: [true, "Full Name is required"],
+      required: true,
+      unique: true,
+      immutable: true,
+      default: () => crypto.randomUUID(),
     },
-    email: {
-      type: String,
-      required: [true, "Email is required"],
+
+    fullname: { type: String, required: [true, "Full Name is required"] },
+    email: { type: String, required: [true, "Email is required"] },
+    password: { type: String, required: [true, "Password is required"] },
+    cnic: { type: String, required: [true, "CNIC is required"] },
+    mobile: { type: String, required: [true, "Mobile is required"] },
+    address: { type: String, required: [true, "Address is required"] },
+
+    // The account's role  the SOLE source of its permissions.
+    roleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Role",
+      required: [true, "A role is required for every account"],
+      index: true,
     },
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-    },
-    cnic: {
-      type: String,
-      required: [true, "CNIC is required"],
-    },
-    mobile: {
-      type: String,
-      required: [true, "Mobile is required"],
-    },
-    address: {
-      type: String,
-      required: [true, "Address is required"],
-    },
-    type: {
-      type: String,
-      required: [true, "Type is required"],
-      enum: [
-    STAFF_TYPES.platformSuperAdmin, 
-    STAFF_TYPES.orgSuperAdmin, 
-    STAFF_TYPES.orgAdmin, 
-    STAFF_TYPES.orgStaff,
-    'partner',    // ← legacy support
-    'admin',      // ← legacy support
-    'staff',      // ← legacy support
-    'superadmin'  // ← legacy support
-],
-    },
-    share: {
-      type: Number,
-      required: [
-        this.type === STAFF_TYPES.partner || this.type === STAFF_TYPES.admin
-          ? true
-          : false,
-        "Share is required when type is partner",
-      ],
-    },
-    profileImage: {
-      type: String,
-    },
-    // organizationId - superadmin ==> null  and others for required
+
+    // Financial profit-sharing (independent of access).
+    isPartner: { type: Boolean, default: false },
+    share: { type: Number, default: 0 },
+
+    profileImage: { type: String },
+
     organizationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Organization",
-      default: null,
+      required: [true, "OrganizationId is required"],
+      index: true,
     },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Staff",
-    },
-    updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Staff",
-    },
-    // role: type se auto-set hota hai — null nahi rehna chahiye (partner ke ilawa)
-    role: {
-      type: String,
-      enum: ['platformSuperAdmin', 'orgSuperAdmin', 'orgAdmin', 'orgStaff', null],
-      default: null,
-    },
-    // roleId: orgStaff ke liye zaroori — custom permissions ke liye DB Role reference
-    roleId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Role',
-      default: null,
-    },
+
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// add plugin that converts mongoose to json
 StaffSchema.plugin(toJSON);
 StaffSchema.plugin(paginate);
 
-/**
- * Check if password matches the Staff's password
- * @param {string} password
- * @returns {Promise<boolean>}
- */
 StaffSchema.methods.isPasswordMatch = async function (password) {
-  const Staff = this;
-  return bcrypt.compare(password, Staff.password);
+  return bcrypt.compare(password, this.password);
 };
 
 StaffSchema.pre("save", async function (next) {
-  const Staff = this;
-  if (Staff.isModified("password")) {
-    Staff.password = await bcrypt.hash(Staff.password, 8);
+  if (this.isModified("password")) {
+    this.password = await bcrypt.hash(this.password, 8);
   }
   next();
 });
 
-/**
- * @typedef Staff
- */
 const Staff = mongoose.model("Staff", StaffSchema);
-
 module.exports = Staff;
