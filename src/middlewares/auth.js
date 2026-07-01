@@ -1,12 +1,32 @@
 const passport = require('passport');
 const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
-const roleService = require('../modules/role/role.service');
-const { StaffModel } = require('../models');
+const StaffModel = require('../modules/staff/staff.model');
+const RoleModel = require('../modules/role/role.model');
 
-const isPlatformSA  = (u) => u?.role === 'platformSuperAdmin' || u?.type === 'platformSuperAdmin';
-const isOrgSuperAdmin = (u) => u?.role === 'orgSuperAdmin' || u?.type === 'orgSuperAdmin';
-const isOrgAdmin    = (u) => u?.role === 'orgAdmin' || u?.type === 'orgAdmin' || u?.type === 'admin' || u?.type === 'superadmin';
+/**
+ * Authorization middleware.
+ *
+ * Usage:
+ *   auth()                          -> any authenticated account
+ *   auth('isp.view', 'isp.edit')    -> account's role must include ALL listed permissions
+ *
+ * There are NO hardcoded/system roles. Each account is assigned a DB Role and its
+ * permissions come entirely from that role. The "platform super admin" is simply
+ * an account whose role includes the `organization.*` permissions.
+ *
+ * Rules:
+ *   - Account + role are re-loaded fresh every request, so permission changes take
+ *     effect immediately.
+ *   - Strict multi-tenancy: an account may only operate within its own organization
+ *     (a subdomain resolving to a different org is rejected). Cross-org access only
+ *     exists for organization management, via `organization.*` on dedicated routes.
+ */
+const loadPermissions = async (staff) => {
+    if (!staff.roleId) return [];
+    const role = await RoleModel.findById(staff.roleId).lean();
+    return role && Array.isArray(role.permissions) ? role.permissions : [];
+};
 
 const verifyCallback = (req, resolve, reject, requiredPermissions) => async (err, jwtUser, info) => {
     if (err || info || !jwtUser) {
@@ -14,62 +34,39 @@ const verifyCallback = (req, resolve, reject, requiredPermissions) => async (err
     }
 
     try {
-        // Always fresh from DB — role changes take effect immediately
-        const user = await StaffModel.findById(jwtUser._id || jwtUser.id).lean();
-        if (!user) return reject(new ApiError(httpStatus.UNAUTHORIZED, 'User no longer exists'));
+        const user = await StaffModel.findById(jwtUser._id || jwtUser.id);
+        if (!user) {
+            return reject(new ApiError(httpStatus.UNAUTHORIZED, 'Account no longer exists'));
+        }
+        if (!user.organizationId) {
+            return reject(new ApiError(httpStatus.FORBIDDEN, 'Account is not associated with any organization'));
+        }
 
+        const permissions = await loadPermissions(user);
+
+        // Convenience: expose permissions on the request and the user object.
+        user.permissions = permissions;
         req.user = user;
-        req.organizationId = user.organizationId || null;
+        req.userPermissions = permissions;
+        req.organizationId = user.organizationId;
 
-        // ── Special: platformSuperAdmin-only routes ────────────────────────
-        if (requiredPermissions.includes('platformSuperAdmin')) {
-            if (!isPlatformSA(user)) {
-                return reject(new ApiError(httpStatus.FORBIDDEN, 'Access denied — Platform Super Admin only'));
-            }
-            return resolve();
+        // Strict tenant isolation: block access via another org's subdomain.
+        if (req.subdomainOrgId &&
+            user.organizationId.toString() !== req.subdomainOrgId.toString()) {
+            return reject(new ApiError(httpStatus.FORBIDDEN, 'Cross-organization access denied'));
         }
 
-        // ── Platform Super Admin — full access ─────────────────────────────
-        if (isPlatformSA(user)) return resolve();
-
-        // ── Routes with required permissions ──────────────────────────────
         if (requiredPermissions.length) {
-
-            // orgSuperAdmin / orgAdmin — full access within their org
-            if (isOrgSuperAdmin(user) || isOrgAdmin(user)) return resolve();
-
-            // orgStaff — check role permissions from DB
-            if (user.roleId) {
-                const role = await roleService.getRoleById(user.roleId);
-
-                if (!role) {
-                    return reject(new ApiError(
-                        httpStatus.FORBIDDEN,
-                        'Assigned role not found in database — contact admin'
-                    ));
-                }
-
-                // role.permissions is plain array (lean) — direct includes works
-                const storedPermissions = Array.isArray(role.permissions) ? role.permissions : [];
-
-                const missingPermissions = requiredPermissions.filter(p => !storedPermissions.includes(p));
-
-                if (missingPermissions.length > 0) {
-                    return reject(new ApiError(
-                        httpStatus.FORBIDDEN,
-                        `Insufficient permissions. Missing: ${missingPermissions.join(', ')}`
-                    ));
-                }
-
-                return resolve();
+            const missing = requiredPermissions.filter((p) => !permissions.includes(p));
+            if (missing.length > 0) {
+                return reject(new ApiError(
+                    httpStatus.FORBIDDEN,
+                    `Insufficient permissions. Missing: ${missing.join(', ')}`
+                ));
             }
-
-            return reject(new ApiError(httpStatus.FORBIDDEN, 'No role assigned to this staff member'));
         }
 
-        // ── No specific permissions required — just authenticated ──────────
-        resolve();
-
+        return resolve();
     } catch (error) {
         return reject(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Auth error: ' + error.message));
     }
