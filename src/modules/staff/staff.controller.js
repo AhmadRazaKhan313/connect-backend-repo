@@ -2,125 +2,113 @@ const httpStatus = require("http-status");
 const ApiError = require("../../utils/ApiError");
 const catchAsync = require("../../utils/catchAsync");
 const { staffService } = require("../../services");
-const { STAFF_TYPES } = require("../../utils/Constants");
 const { sendSms } = require("../../services/email.service");
 const { s3 } = require("../../services/s3Service");
+const { assertSameOrg } = require("../../utils/tenant");
+const RoleModel = require("../role/role.model");
 
 let staffController = {};
 
+// Validate that a roleId exists and belongs to the requester's organization.
+const resolveRole = async (roleId, req) => {
+  if (!roleId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "A role is required for every account");
+  }
+  const role = await RoleModel.findById(roleId);
+  if (!role || role.organizationId.toString() !== req.organizationId.toString()) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid role for this organization");
+  }
+  return role;
+};
+
 staffController.createStaff = catchAsync(async (req, res) => {
-  const { organizationId } = req;
-  const body = req.body;
+  const body = { ...req.body };
+  await resolveRole(body.roleId, req); // every account MUST have a valid org role
 
-  // Har type ke liye role auto-assign karo — koi bhi bina role ke nahi banega
-  const TYPE_TO_ROLE = {
-    [STAFF_TYPES.platformSuperAdmin]: STAFF_TYPES.platformSuperAdmin,
-    [STAFF_TYPES.orgSuperAdmin]:      STAFF_TYPES.orgSuperAdmin,
-    [STAFF_TYPES.orgAdmin]:           STAFF_TYPES.orgAdmin,
-    [STAFF_TYPES.orgStaff]:           STAFF_TYPES.orgStaff,
-  };
+  body.isPartner = body.isPartner === true;
+  body.share = body.isPartner ? Number(body.share || 0) : 0;
 
-  if (!TYPE_TO_ROLE[body.type]) {
-    // partner / legacy types ke liye role null rehta hai (financial only)
-    body.role = null;
-  } else {
-    body.role = TYPE_TO_ROLE[body.type];
-  }
-
-  // orgStaff aur partner dono ke liye roleId LAZMI hai
-  if (
-    (body.type === STAFF_TYPES.orgStaff || body.type === STAFF_TYPES.partner) &&
-    !body.roleId
-  ) {
-    throw new ApiError(httpStatus.BAD_REQUEST, `${body.type} ke liye custom role assign karna zaroori hai`);
-  }
-
-  const partners = await staffService.getAllPartners(organizationId);
-
-  if (body.type === STAFF_TYPES.partner) {
-    const allPartnersShare = partners.reduce((acc, p) => (acc += +p?.share), 0);
-    if (allPartnersShare + body?.share > 100) {
-      throw new ApiError(
-        httpStatus.NOT_ACCEPTABLE,
-        `Max share limit remaining is ${100 - allPartnersShare}`
-      );
+  if (body.isPartner) {
+    const partners = await staffService.getAllPartners(req.organizationId);
+    const usedShare = partners.reduce((acc, p) => acc + (+p?.share || 0), 0);
+    if (usedShare + body.share > 100) {
+      throw new ApiError(httpStatus.NOT_ACCEPTABLE, `Max share limit remaining is ${100 - usedShare}`);
     }
   }
 
-  const staff = await staffService.createStaff({ ...body, organizationId });
-  sendSmsAndEmail(staff, body);
+  const staff = await staffService.createStaff({
+    fullname: body.fullname,
+    email: body.email,
+    password: body.password,
+    cnic: body.cnic,
+    mobile: body.mobile,
+    address: body.address,
+    roleId: body.roleId,
+    isPartner: body.isPartner,
+    share: body.share,
+    organizationId: req.organizationId, // always the requester's org  no cross-org creation
+    createdBy: req.user?._id || req.user?.id,
+  });
+
+  sendSmsAndEmail(staff, req.body);
+  staff.password = undefined;
   res.status(httpStatus.CREATED).send(staff);
 });
 
 staffController.updateStaff = catchAsync(async (req, res) => {
   const staff = await staffService.getStaffById(req.params.id);
-  if (!staff) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Staff not found");
-  }
+  assertSameOrg(staff, req, "Staff");
 
-  const isSelf = req.user?._id?.toString() === req.params.id ||
-                 req.user?.id?.toString() === req.params.id;
+  const body = { ...req.body };
+  const requesterId = (req.user?._id || req.user?.id)?.toString();
+  const isSelf = requesterId === req.params.id;
 
-  // Apna role aur type khud nahi badal sakta
+  // Immutable / protected.
+  delete body._id;
+  delete body.uuid;
+  delete body.__v;
+  delete body.createdAt;
+  delete body.updatedAt;
+  delete body.createdBy;
+  delete body.password;       // dedicated password endpoint
+  delete body.organizationId; // accounts cannot move organizations
+
+  // A user cannot change their own role or partner status (no self-escalation).
   if (isSelf) {
-    delete req.body.role;
-    delete req.body.roleId;
-    delete req.body.type;
+    delete body.roleId;
+    delete body.isPartner;
+    delete body.share;
   }
 
-  // System role ID assign nahi ho sakta (system-... format invalid ObjectId hai)
-  if (req.body.roleId && typeof req.body.roleId === 'string' && req.body.roleId.startsWith('system-')) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "System roles cannot be assigned as roleId");
+  if (body.roleId !== undefined) {
+    await resolveRole(body.roleId, req);
+  }
+  if (body.isPartner !== undefined) {
+    body.isPartner = body.isPartner === true;
+    body.share = body.isPartner ? Number(body.share || 0) : 0;
   }
 
-  // platformSuperAdmin ka role koi nahi badal sakta
-  if (
-    staff.type === 'platformSuperAdmin' ||
-    staff.role === 'platformSuperAdmin'
-  ) {
-    // Sirf apna profile update kar sakta hai (name, email, password etc.)
-    // Role/type protect karo
-    delete req.body.role;
-    delete req.body.roleId;
-    delete req.body.type;
-  }
-
-  // Bug fix: password is NEVER updated through this endpoint
-  // Password change has a dedicated endpoint — accidental overwrite rokne ke liye
-  delete req.body.password;
-
-  // _id, __v, createdAt, updatedAt — immutable fields bhi hatao
-  delete req.body._id;
-  delete req.body.__v;
-  delete req.body.createdAt;
-  delete req.body.updatedAt;
-
-  const updated = await staffService.updateStaff(req.params.id, req.body);
+  body.updatedBy = req.user?._id || req.user?.id;
+  const updated = await staffService.updateStaff(req.params.id, body);
+  updated.password = undefined;
   res.send(updated);
 });
 
 staffController.deleteStaff = catchAsync(async (req, res) => {
   const staff = await staffService.getStaffById(req.params.id);
-  if (!staff) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Staff not found");
-  }
-  // Apna account delete na kar sake
-  if (
-    req.user?._id?.toString() === req.params.id ||
-    req.user?.id?.toString() === req.params.id
-  ) {
+  assertSameOrg(staff, req, "Staff");
+
+  const requesterId = (req.user?._id || req.user?.id)?.toString();
+  if (requesterId === req.params.id) {
     throw new ApiError(httpStatus.FORBIDDEN, "You cannot delete your own account");
   }
-  // platformSuperAdmin delete nahi ho sakta
-  if (staff.type === 'platformSuperAdmin' || staff.role === 'platformSuperAdmin') {
-    throw new ApiError(httpStatus.FORBIDDEN, "Platform Super Admin cannot be deleted");
-  }
+
   await staffService.deleteStaff(req.params.id);
   res.status(httpStatus.NO_CONTENT).send();
 });
 
 async function sendSmsAndEmail(staff, body) {
-  const message = `Dear ${staff?.fullname}, You have been registered as a staff to Connect Communications Lodhran Family. Your new password is '${body?.password}'`;
+  const message = `Dear ${staff?.fullname}, You have been registered as a staff member. Your new password is '${body?.password}'`;
   if (body?.sendWelcomeMessage && body?.mobile && body?.mobile !== "") {
     await sendSms(body?.mobile, message);
   }
@@ -136,9 +124,8 @@ staffController.getAllStaffs = catchAsync(async (req, res) => {
 
 staffController.getStaff = catchAsync(async (req, res) => {
   const staff = await staffService.getStaffById(req.params.id);
-  if (!staff) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Staff not found");
-  }
+  assertSameOrg(staff, req, "Staff");
+  staff.password = undefined;
   res.send(staff);
 });
 
@@ -172,10 +159,10 @@ staffController.updateProfile = catchAsync(async (req, res) => {
   const update = await staffService.updateProfile(user?.id, updateBody);
   if (update) {
     let staff = await staffService.getStaffById(user?.id);
-    staff.password = null;
+    staff.password = undefined;
     res.send(staff);
   } else {
-    throw new ApiError(httpStatus[404], "Something went wrong");
+    throw new ApiError(httpStatus.NOT_FOUND, "Something went wrong");
   }
 });
 

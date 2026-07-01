@@ -22,6 +22,7 @@ router.get(
     staffController.getAllPartners
 );
 
+// Self-service profile update (any authenticated account).
 router.post(
     '/update-profile',
     upload.single('profileImage'),
@@ -33,7 +34,7 @@ router.post(
 router
     .route('/:id')
     .get(auth('staff.view'), validate(staffValidation.getStaffById), staffController.getStaff)
-    .patch(auth(), validate(staffValidation.updateStaff), staffController.updateStaff)
-    .delete(auth(), staffController.deleteStaff);
+    .patch(auth('staff.edit'), validate(staffValidation.updateStaff), staffController.updateStaff)
+    .delete(auth('staff.delete'), validate(staffValidation.getStaffById), staffController.deleteStaff);
 
 module.exports = router;
