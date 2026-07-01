@@ -14,6 +14,7 @@ const {
 } = require("../../utils/helpers");
 const moment = require("moment");
 const { getPaymentMethodNameByKey } = require("../../utils/helpers");
+const { assertSameOrg } = require("../../utils/tenant");
 
 let entryController = {};
 
@@ -147,9 +148,7 @@ entryController.getAllPendingEntriesWithinDateRange = catchAsync(
 
 entryController.getEntryById = catchAsync(async (req, res) => {
   const entry = await entryService.getEntryById(req.params.id);
-  if (!entry) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Entry not found");
-  }
+  assertSameOrg(entry, req, "Entry");
   res.send(entry);
 });
 
@@ -167,8 +166,8 @@ entryController.updateEntryById = catchAsync(async (req, res) => {
     req.body.expiryDate.setUTCHours(0, 0, 0, 0);
   }
   const entry = await entryService.getEntryById(req?.params?.id);
-  if (!entry) throw new ApiError(httpStatus.NOT_FOUND, "Entry Not Found");
-  else {
+  assertSameOrg(entry, req, "Entry");
+  {
     const Package = await packageService.getPackageById(req?.body?.package);
     if (Package?.rateType === "day") {
       const days = getDaysBetweenDates(
@@ -216,8 +215,8 @@ entryController.updateEntryById = catchAsync(async (req, res) => {
 
 entryController.deleteEntryBy = catchAsync(async (req, res) => {
   const entry = await entryService.getEntryById(req?.params?.id);
-  if (!entry) throw new ApiError(httpStatus.NOT_FOUND, "Entry Not Found");
-  else {
+  assertSameOrg(entry, req, "Entry");
+  {
     await ispService.updateIspById(entry?.isp?.id, {
       openingBalance: entry?.isp?.openingBalance + entry?.package?.purchaseRate,
     });

@@ -2,6 +2,7 @@ const httpStatus = require("http-status");
 const ApiError = require("../../utils/ApiError");
 const catchAsync = require("../../utils/catchAsync");
 const { extraIncomeService, userService } = require("../../services");
+const { assertSameOrg } = require("../../utils/tenant");
 let entryController = {};
 
 entryController.createExtraIncome = catchAsync(async (req, res) => {
@@ -66,9 +67,7 @@ entryController.getExtraIncomeById = catchAsync(async (req, res) => {
   const extraIncome = await extraIncomeService.getExtraIncomeById(
     req.params.id
   );
-  if (!extraIncome) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Extra Income not found");
-  }
+  assertSameOrg(extraIncome, req, "Extra Income");
   res.send(extraIncome);
 });
 
@@ -80,9 +79,8 @@ entryController.updateExtraIncomeById = catchAsync(async (req, res) => {
   const extraIncome = await extraIncomeService.getExtraIncomeById(
     req?.params?.id
   );
-  if (!extraIncome)
-    throw new ApiError(httpStatus.NOT_FOUND, "Extra Income Not Found");
-  else {
+  assertSameOrg(extraIncome, req, "Extra Income");
+  {
     const ExtraIncome = await extraIncomeService.updateExtraIncomeById(
       req?.params?.id,
       req?.body
@@ -95,9 +93,8 @@ entryController.deleteExtraIncomeById = catchAsync(async (req, res) => {
   const extraIncome = await extraIncomeService.getExtraIncomeById(
     req?.params?.id
   );
-  if (!extraIncome)
-    throw new ApiError(httpStatus.NOT_FOUND, "Extra Income Not Found");
-  else {
+  assertSameOrg(extraIncome, req, "Extra Income");
+  {
     const ExtraIncome = await extraIncomeService.deleteExtraIncome(
       req?.params?.id
     );

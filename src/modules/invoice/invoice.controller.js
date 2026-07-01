@@ -2,6 +2,7 @@ const httpStatus = require("http-status");
 const ApiError = require("../../utils/ApiError");
 const catchAsync = require("../../utils/catchAsync");
 const { invoiceService, ispService, entryService } = require("../../services");
+const { assertSameOrg } = require("../../utils/tenant");
 let invoiceController = {};
 
 invoiceController.createInvoice = catchAsync(async (req, res) => {
@@ -54,9 +55,7 @@ invoiceController.getSentInvoices = catchAsync(async (req, res) => {
 
 invoiceController.getInvoiceById = catchAsync(async (req, res) => {
   const invoice = await invoiceService.getInvoiceById(req.params.id);
-  if (!invoice) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Invoice not found");
-  }
+  assertSameOrg(invoice, req, "Invoice");
   res.send(invoice);
 });
 
@@ -66,8 +65,8 @@ invoiceController.updateInvoiceById = catchAsync(async (req, res) => {
     req.body.date.setUTCHours(0, 0, 0, 0);
   }
   const invoice = await invoiceService.getInvoiceById(req?.params?.id);
-  if (!invoice) throw new ApiError(httpStatus.NOT_FOUND, "Invoice Not Found");
-  else {
+  assertSameOrg(invoice, req, "Invoice");
+  {
     const Invoice = await invoiceService.updateInvoiceById(
       req?.params?.id,
       req?.body
@@ -79,8 +78,8 @@ invoiceController.updateInvoiceById = catchAsync(async (req, res) => {
 invoiceController.deleteInvoice = catchAsync(async (req, res) => {
   const { id } = req?.params;
   const invoice = await invoiceService.getInvoiceById(id);
-  if (!invoice) throw new ApiError(httpStatus.NOT_FOUND, "Invoice Not Found");
-  else {
+  assertSameOrg(invoice, req, "Invoice");
+  {
     await ispService.updateIspById(invoice?.isp?.id, {
       openingBalance: +invoice?.isp?.openingBalance + invoice?.amount,
     });

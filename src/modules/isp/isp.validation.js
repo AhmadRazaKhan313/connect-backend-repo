@@ -9,8 +9,8 @@ ispValidation.createIsp = {
     openingBalance: Joi.number().required("Opening Balance is required"),
     staticIpRate: Joi.number().min(0).required("Static Ip Rate is required"),
     color: Joi.string().required("Color is required"),
-    // platformSuperAdmin body se organizationId bhejta hai
-    organizationId: Joi.string().optional().allow('', null),
+    // organizationId is ignored here; ISPs are always created in the requester's org.
+    organizationId: Joi.string().optional().allow("", null),
   }),
 };
 

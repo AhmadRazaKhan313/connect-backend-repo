@@ -2,6 +2,7 @@ const httpStatus = require("http-status");
 const ApiError = require("../../utils/ApiError");
 const catchAsync = require("../../utils/catchAsync");
 const { userService } = require("../../services");
+const { assertSameOrg } = require("../../utils/tenant");
 const { sendSms, sendTemplateForWelcome } = require("../../services/email.service");
 
 let userController = {};
@@ -29,17 +30,15 @@ userController.getAllUsers = catchAsync(async (req, res) => {
 });
 
 userController.getUser = catchAsync(async (req, res) => {
-  const user = await userService.getUserById(req.params.userId);
-  if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
-  }
+  const user = await userService.getUserById(req.params.id);
+  assertSameOrg(user, req, "User");
   res.send(user);
 });
 
 userController.updateUserById = catchAsync(async (req, res) => {
   const user = await userService.getUserById(req?.params?.id);
-  if (!user) throw new ApiError(httpStatus.NOT_FOUND, "User Not Found");
-  else {
+  assertSameOrg(user, req, "User");
+  {
     const User = await userService.updateUserById(req?.params?.id, req?.body);
     const newUser = await userService.getUserById(req?.params?.id);
     if (newUser) {
@@ -57,8 +56,8 @@ userController.updateUserById = catchAsync(async (req, res) => {
 
 userController.deleteUserById = catchAsync(async (req, res) => {
   const user = await userService.getUserById(req?.params?.id);
-  if (!user) throw new ApiError(httpStatus.NOT_FOUND, "User Not Found");
-  else {
+  assertSameOrg(user, req, "User");
+  {
     const User = await userService.deleteUserById(req?.params?.id);
     res.send(User);
   }

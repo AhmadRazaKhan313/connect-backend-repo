@@ -70,7 +70,7 @@ router.get(
 
 router
     .route('/:id')
-    .get(validate(expenseValidation.getExpenseById), expenseController.getExpenseById)
+    .get(auth('expense.view'), validate(expenseValidation.getExpenseById), expenseController.getExpenseById)
     .patch(auth('expense.edit'), validate(expenseValidation.updateExpense), expenseController.updateExpenseById)
     .delete(auth('expense.delete'), validate(expenseValidation.getExpenseById), expenseController.deleteExpenseById);
 
