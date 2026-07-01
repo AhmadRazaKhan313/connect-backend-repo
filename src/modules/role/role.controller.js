@@ -50,6 +50,19 @@ roleController.updateRole = catchAsync(async (req, res) => {
   const role = await roleService.getRoleById(req.params.id);
   assertSameOrg(role, req, "Role");
 
+  // Self-lockout guard: you may not edit the permissions of the role that
+  // YOU are currently assigned to. Otherwise an account (including a Super
+  // Admin) could strip its own access, or strip `role.edit` itself, making
+  // the role unrecoverable without direct DB access. Another account holding
+  // the same role (e.g. a co-admin) may still edit it.
+  const myRoleId = req.user?.roleId?.toString();
+  if (myRoleId && myRoleId === req.params.id) {
+    throw new ApiError(
+      httpStatus.FORBIDDEN,
+      "You cannot edit the permissions of your own role. Ask another admin, or assign yourself a different role first."
+    );
+  }
+
   const update = {};
   if (req.body.name !== undefined) update.name = req.body.name;
   if (req.body.permissions !== undefined) {
