@@ -10,15 +10,6 @@ const PAYMENT_METHODS = [
     { key: 'pending', value: 'Pending' }
 ];
 
-const STAFF_TYPES = {
-    platformSuperAdmin: 'platformSuperAdmin',
-    orgSuperAdmin: 'orgSuperAdmin',
-    orgAdmin: 'orgAdmin',
-    orgStaff: 'orgStaff',
-    partner: 'partner',  
-}
-
 module.exports = {
     PAYMENT_METHODS,
-    STAFF_TYPES
-}
+};
